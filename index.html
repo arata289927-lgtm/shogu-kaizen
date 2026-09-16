@@ -40,13 +40,21 @@ button{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:7
   <div id="workView">
     <div class="card">
       <div id="serviceTitle" class="serviceTitle"></div>
-      <div class="period">対象期間：6月～11月（6か月）</div>
+      <div class="period">対象期間：
+        <select id="periodSel" onchange="changePeriod()" style="padding:7px;border-radius:8px">
+          <option value="jun">6月～11月</option><option value="dec">12月～5月</option>
+        </select>（6か月）
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+        <div><label>事業所名</label><input id="office" placeholder="事業所名" oninput="saveMeta()"></div>
+        <div><label>作成日</label><input id="created" type="date" oninput="saveMeta()"></div>
+      </div>
       <label>半年間の処遇改善加算金総額（円）</label>
       <input id="total" type="number" min="0" inputmode="numeric" placeholder="例：1200000" oninput="readCalcSave()">
     </div>
     <div class="card grid">
       <table>
-        <thead><tr><th>担当者</th><th>6月</th><th>7月</th><th>8月</th><th>9月</th><th>10月</th><th>11月</th><th>延べ人数</th><th>比率</th><th>分配金</th></tr></thead>
+        <thead><tr><th>担当者</th><th class="mh"></th><th class="mh"></th><th class="mh"></th><th class="mh"></th><th class="mh"></th><th class="mh"></th><th>延べ人数</th><th>比率</th><th>分配金</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -61,7 +69,15 @@ button{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:7
       <div><div class="hint">全職員 延べ人数</div><div id="sumExt" class="big">0人</div></div>
       <div><div class="hint">分配金 合計</div><div id="sumMoney" class="big">0円</div></div>
     </div>
-    <div class="card hint">担当者名と6月～11月の担当利用者数を入力すると、半年延べ人数・比率・分配金を自動計算します。居宅介護支援と計画相談支援は別々に保存されます。端数は最後に人数が入力されている担当者で調整し、各区分の総額と一致させます。</div>
+    <div class="card" id="approval">
+      <div style="font-weight:800;margin-bottom:8px">確認欄</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div><label>作成者</label><input id="maker" oninput="saveMeta()"></div>
+        <div><label>確認者</label><input id="checker" oninput="saveMeta()"></div>
+        <div><label>承認者</label><input id="approver" oninput="saveMeta()"></div>
+      </div>
+    </div>
+    <div class="card hint">担当者名と対象6か月の担当利用者数を入力すると、半年延べ人数・比率・分配金を自動計算します。居宅介護支援と計画相談支援は別々に保存されます。端数は最後に人数が入力されている担当者で調整し、各区分の総額と一致させます。</div>
   </div>
   <div id="allView" class="hidden"></div>
 </div>
@@ -72,10 +88,18 @@ const defs={
  keikaku:{title:'計画相談支援',key:'shoguDistKeikaku'}
 };
 let current='kyotaku';
+let period=localStorage.getItem('shoguPeriod')||'jun';
+const periodMonths={jun:['6月','7月','8月','9月','10月','11月'],dec:['12月','1月','2月','3月','4月','5月']};
+function storageKey(k){return defs[k].key+'_'+period}
+function getMeta(){try{return JSON.parse(localStorage.getItem('shoguMeta'))||{}}catch(e){return {}}}
+function saveMeta(){let m={office:office.value,created:created.value,maker:maker.value,checker:checker.value,approver:approver.value};localStorage.setItem('shoguMeta',JSON.stringify(m))}
+function loadMeta(){let m=getMeta();office.value=m.office||'';created.value=m.created||new Date().toISOString().slice(0,10);maker.value=m.maker||'';checker.value=m.checker||'';approver.value=m.approver||''}
+function changePeriod(){period=periodSel.value;localStorage.setItem('shoguPeriod',period);render()}
+
 
 function blank(){return {total:'',rows:Array.from({length:8},()=>({name:'',nums:Array(6).fill('0')}))}}
-function getData(k){try{return JSON.parse(localStorage.getItem(defs[k].key))||blank()}catch(e){return blank()}}
-function saveData(k,d){localStorage.setItem(defs[k].key,JSON.stringify(d))}
+function getData(k){try{return JSON.parse(localStorage.getItem(storageKey(k)))||blank()}catch(e){return blank()}}
+function saveData(k,d){localStorage.setItem(storageKey(k),JSON.stringify(d))}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 
 function switchView(v){
@@ -99,7 +123,10 @@ function rowHtml(r){
 function render(){
  const d=getData(current);
  document.getElementById('serviceTitle').textContent=defs[current].title;
+ document.getElementById('periodSel').value=period;
+ [...document.querySelectorAll('.mh')].forEach((x,i)=>x.textContent=periodMonths[period][i]);
  document.getElementById('total').value=d.total;
+ loadMeta();
  document.getElementById('rows').innerHTML=d.rows.map(rowHtml).join('');
  calc();
 }
@@ -130,7 +157,7 @@ function calc(){
  document.getElementById('sumMoney').textContent=(all?total:0).toLocaleString()+'円';
 }
 function addRow(){let d=readData();d.rows.push({name:'',nums:Array(6).fill('0')});saveData(current,d);render()}
-function resetCurrent(){if(confirm(defs[current].title+'の入力内容をすべて消しますか？')){localStorage.removeItem(defs[current].key);render()}}
+function resetCurrent(){if(confirm(defs[current].title+'の入力内容をすべて消しますか？')){localStorage.removeItem(storageKey(current));render()}}
 function stats(k){
  const d=getData(k), ext=d.rows.reduce((s,r)=>s+(r.nums||[]).reduce((a,x)=>a+(+x||0),0),0);
  return {total:+d.total||0,ext};
@@ -158,7 +185,7 @@ function resultText(k){
  let amounts=exts.map(x=>all?Math.floor(total*x/all):0);
  let diff=total-amounts.reduce((a,b)=>a+b,0), last=-1;
  exts.forEach((x,i)=>{if(x>0)last=i}); if(last>=0) amounts[last]+=diff;
- let lines=[`【${defs[k].title}】`,`対象期間：6月～11月`,`処遇改善加算金総額：${total.toLocaleString()}円`,`延べ人数合計：${all.toLocaleString()}人`,''];
+ let lines=[`【${defs[k].title}】`,`対象期間：${periodMonths[period].join('・')}`,`処遇改善加算金総額：${total.toLocaleString()}円`,`延べ人数合計：${all.toLocaleString()}人`,''];
  d.rows.forEach((r,i)=>{
    if((r.name||'').trim() || exts[i]>0){
      const ratio=all?exts[i]/all*100:0;
@@ -172,7 +199,7 @@ async function shareResult(){
  let textToShare;
  if(current==='all'){
    const a=stats('kyotaku'),b=stats('keikaku');
-   textToShare=`【処遇改善分配 全体集計】\n対象期間：6月～11月\n居宅介護支援：${a.total.toLocaleString()}円／延べ${a.ext.toLocaleString()}人\n計画相談支援：${b.total.toLocaleString()}円／延べ${b.ext.toLocaleString()}人\n会社全体：${(a.total+b.total).toLocaleString()}円／延べ${(a.ext+b.ext).toLocaleString()}人`;
+   textToShare=`【処遇改善分配 全体集計】\n${periodMonths[period].join('・')}\n居宅介護支援：${a.total.toLocaleString()}円／延べ${a.ext.toLocaleString()}人\n計画相談支援：${b.total.toLocaleString()}円／延べ${b.ext.toLocaleString()}人\n会社全体：${(a.total+b.total).toLocaleString()}円／延べ${(a.ext+b.ext).toLocaleString()}人`;
  } else {
    saveData(current,readData());
    textToShare=resultText(current);
