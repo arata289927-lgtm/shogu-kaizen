@@ -22,6 +22,11 @@ button{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:7
 .sum{display:grid;grid-template-columns:1fr 1fr;gap:10px}.big{font-size:21px;font-weight:800}.hint{font-size:13px;color:#536168;line-height:1.6}
 .overview table{min-width:0}.overview th{background:var(--g)}.overview td{font-weight:700}.hidden{display:none}
 @media(max-width:650px){.wrap{padding:8px}.tabs{grid-template-columns:1fr 1fr}.tabs .tab:last-child{grid-column:1/3}.sum{grid-template-columns:1fr}}
+@media print{
+ body{background:#fff} header{position:static} .tabs,.actions,.noPrint{display:none!important}
+ .wrap{max-width:none;padding:0}.card{box-shadow:none;border:0;padding:6px}.grid{overflow:visible}
+ table{min-width:0;font-size:10pt} input{border:0;padding:2px;background:transparent}
+}
 </style>
 </head>
 <body>
@@ -45,7 +50,10 @@ button{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:7
         <tbody id="rows"></tbody>
       </table>
     </div>
-    <div class="card actions">
+    <div class="card actions noPrint">
+      <button class="add" onclick="manualSave()">💾 保存</button>
+      <button class="add" onclick="window.print()">🖨️ 印刷 / PDF</button>
+      <button class="add" onclick="shareResult()">📤 共有</button>
       <button class="add" onclick="addRow()">＋担当者追加</button>
       <button class="reset" onclick="resetCurrent()">この区分をリセット</button>
     </div>
@@ -136,6 +144,49 @@ function renderAll(){
  <tr><td>計画相談支援</td><td>${b.total.toLocaleString()}円</td><td>${b.ext.toLocaleString()}人</td></tr>
  <tr class="out"><td>会社全体</td><td>${t.toLocaleString()}円</td><td>${e.toLocaleString()}人</td></tr>
  </tbody></table></div>`;
+}
+
+function manualSave(){
+ if(current==='all'){alert('居宅介護支援・計画相談支援はそれぞれ自動保存されています。');return}
+ const d=readData(); saveData(current,d);
+ alert(defs[current].title+'の入力内容を保存しました。');
+}
+function resultText(k){
+ const d=getData(k);
+ const exts=d.rows.map(r=>(r.nums||[]).reduce((a,x)=>a+(+x||0),0));
+ const all=exts.reduce((a,b)=>a+b,0), total=+d.total||0;
+ let amounts=exts.map(x=>all?Math.floor(total*x/all):0);
+ let diff=total-amounts.reduce((a,b)=>a+b,0), last=-1;
+ exts.forEach((x,i)=>{if(x>0)last=i}); if(last>=0) amounts[last]+=diff;
+ let lines=[`【${defs[k].title}】`,`対象期間：6月～11月`,`処遇改善加算金総額：${total.toLocaleString()}円`,`延べ人数合計：${all.toLocaleString()}人`,''];
+ d.rows.forEach((r,i)=>{
+   if((r.name||'').trim() || exts[i]>0){
+     const ratio=all?exts[i]/all*100:0;
+     lines.push(`${r.name||'（氏名未入力）'}：延べ${exts[i]}人／${ratio.toFixed(2)}%／${amounts[i].toLocaleString()}円`);
+   }
+ });
+ lines.push('',`分配金合計：${(all?total:0).toLocaleString()}円`);
+ return lines.join('\n');
+}
+async function shareResult(){
+ let textToShare;
+ if(current==='all'){
+   const a=stats('kyotaku'),b=stats('keikaku');
+   textToShare=`【処遇改善分配 全体集計】\n対象期間：6月～11月\n居宅介護支援：${a.total.toLocaleString()}円／延べ${a.ext.toLocaleString()}人\n計画相談支援：${b.total.toLocaleString()}円／延べ${b.ext.toLocaleString()}人\n会社全体：${(a.total+b.total).toLocaleString()}円／延べ${(a.ext+b.ext).toLocaleString()}人`;
+ } else {
+   saveData(current,readData());
+   textToShare=resultText(current);
+ }
+ try{
+   if(navigator.share){
+     await navigator.share({title:'処遇改善分配',text:textToShare});
+   }else if(navigator.clipboard){
+     await navigator.clipboard.writeText(textToShare);
+     alert('共有用の計算結果をコピーしました。LINEやメールに貼り付けてください。');
+   }else{
+     prompt('共有用の計算結果をコピーしてください。',textToShare);
+   }
+ }catch(e){}
 }
 render();
 </script>
