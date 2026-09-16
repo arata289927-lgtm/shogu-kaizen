@@ -59,7 +59,9 @@ button{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:7
   <div id="workView">
     <div class="card">
       <div id="serviceTitle" class="serviceTitle"></div>
-      <div class="period">対象期間：
+      <div class="period">
+        年度：<input id="fiscalYear" type="number" inputmode="numeric" style="width:90px;display:inline-block" onchange="saveMeta()" oninput="saveMeta()">年度
+        ／ 対象期間：
         <select id="periodSel" onchange="changePeriod()" style="padding:7px;border-radius:8px">
           <option value="jun">6月～11月</option><option value="dec">12月～5月</option>
         </select>（6か月）
@@ -111,8 +113,8 @@ let period=localStorage.getItem('shoguPeriod')||'jun';
 const periodMonths={jun:['6月','7月','8月','9月','10月','11月'],dec:['12月','1月','2月','3月','4月','5月']};
 function storageKey(k){return defs[k].key+'_'+period}
 function getMeta(){try{return JSON.parse(localStorage.getItem('shoguMeta'))||{}}catch(e){return {}}}
-function saveMeta(){let m={office:office.value,created:created.value,maker:maker.value,checker:checker.value,approver:approver.value};localStorage.setItem('shoguMeta',JSON.stringify(m))}
-function loadMeta(){let m=getMeta();office.value=m.office||'';created.value=m.created||new Date().toISOString().slice(0,10);maker.value=m.maker||'';checker.value=m.checker||'';approver.value=m.approver||''}
+function saveMeta(){let m={office:office.value,created:created.value,maker:maker.value,checker:checker.value,approver:approver.value,fiscalYear:fiscalYear.value};localStorage.setItem('shoguMeta',JSON.stringify(m))}
+function loadMeta(){let m=getMeta(),now=new Date(),fy=now.getMonth()>=3?now.getFullYear():now.getFullYear()-1;office.value=m.office||'';created.value=m.created||now.toISOString().slice(0,10);maker.value=m.maker||'';checker.value=m.checker||'';approver.value=m.approver||'';fiscalYear.value=m.fiscalYear||fy}
 function changePeriod(){period=periodSel.value;localStorage.setItem('shoguPeriod',period);render()}
 
 
@@ -204,7 +206,7 @@ function resultText(k){
  let amounts=exts.map(x=>all?Math.floor(total*x/all):0);
  let diff=total-amounts.reduce((a,b)=>a+b,0), last=-1;
  exts.forEach((x,i)=>{if(x>0)last=i}); if(last>=0) amounts[last]+=diff;
- let lines=[`【${defs[k].title}】`,`対象期間：${periodMonths[period].join('・')}`,`処遇改善加算金総額：${total.toLocaleString()}円`,`延べ人数合計：${all.toLocaleString()}人`,''];
+ let meta=getMeta(); let lines=[`【${defs[k].title}】`,`年度：${meta.fiscalYear||''}年度`,`対象期間：${periodMonths[period].join('・')}`,`処遇改善加算金総額：${total.toLocaleString()}円`,`延べ人数合計：${all.toLocaleString()}人`,''];
  d.rows.forEach((r,i)=>{
    if((r.name||'').trim() || exts[i]>0){
      const ratio=all?exts[i]/all*100:0;
@@ -218,7 +220,7 @@ async function shareResult(){
  let textToShare;
  if(current==='all'){
    const a=stats('kyotaku'),b=stats('keikaku');
-   textToShare=`【処遇改善分配 全体集計】\n${periodMonths[period].join('・')}\n居宅介護支援：${a.total.toLocaleString()}円／延べ${a.ext.toLocaleString()}人\n計画相談支援：${b.total.toLocaleString()}円／延べ${b.ext.toLocaleString()}人\n会社全体：${(a.total+b.total).toLocaleString()}円／延べ${(a.ext+b.ext).toLocaleString()}人`;
+   textToShare=`【処遇改善分配 全体集計】\n年度：${(getMeta().fiscalYear||'')}年度\n対象期間：${periodMonths[period].join('・')}\n居宅介護支援：${a.total.toLocaleString()}円／延べ${a.ext.toLocaleString()}人\n計画相談支援：${b.total.toLocaleString()}円／延べ${b.ext.toLocaleString()}人\n会社全体：${(a.total+b.total).toLocaleString()}円／延べ${(a.ext+b.ext).toLocaleString()}人`;
  } else {
    saveData(current,readData());
    textToShare=resultText(current);
